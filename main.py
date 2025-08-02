@@ -4,6 +4,7 @@ import os
 from matplotlib import pyplot as plt
 import time
 import mediapipe as mp
+from sklearn.model_selection import train_test_split
 
 mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
@@ -18,6 +19,24 @@ no_sequences = 30
 # Videos are 30 frames in length
 sequence_length = 30
 
+label_map = {label: idx for idx, label in enumerate(actions)}
+
+sequences, labels = [], []
+for action in actions:
+    for sequence in range(no_sequences):
+        window = []
+        for frame_num in range(sequence_length):
+            res = np.load(
+                os.path.join(DATA_PATH, action, str(sequence), str(frame_num) + ".npy")
+            )
+            window.append(res)
+        sequences.append(window)
+        labels.append(label_map[action])
+
+X = np.array(sequences)
+y = np.eye(len(actions), dtype=int)[labels]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.05)
 
 def mediapipe_detection(image, model):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -102,7 +121,6 @@ def main():
                 os.makedirs(os.path.join(DATA_PATH, action, str(sequence)))
             except:
                 pass
-
 
     cap = cv2.VideoCapture(0)
     # Set mediapipe model
