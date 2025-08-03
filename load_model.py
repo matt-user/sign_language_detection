@@ -5,6 +5,7 @@ import os
 import cv2
 import mediapipe as mp
 from pytorch_model import LSTMModel
+from utils import extract_keypoints, mp_holistic, mp_drawing
 
 def load_model(model_path="sign_language_model.pth"):
     """Load the trained model from file"""
@@ -37,40 +38,7 @@ def load_model(model_path="sign_language_model.pth"):
     
     return model, actions
 
-def extract_keypoints(results):
-    """Extract keypoints from MediaPipe results"""
-    pose = (
-        np.array(
-            [
-                [res.x, res.y, res.z, res.visibility]
-                for res in results.pose_landmarks.landmark
-            ]
-        ).flatten()
-        if results.pose_landmarks
-        else np.zeros(33 * 4)
-    )
-    face = (
-        np.array(
-            [[res.x, res.y, res.z] for res in results.face_landmarks.landmark]
-        ).flatten()
-        if results.face_landmarks
-        else np.zeros(468 * 3)
-    )
-    left_hand = (
-        np.array(
-            [[res.x, res.y, res.z] for res in results.left_hand_landmarks.landmark]
-        ).flatten()
-        if results.left_hand_landmarks
-        else np.zeros(21 * 3)
-    )
-    right_hand = (
-        np.array(
-            [[res.x, res.y, res.z] for res in results.right_hand_landmarks.landmark]
-        ).flatten()
-        if results.right_hand_landmarks
-        else np.zeros(21 * 3)
-    )
-    return np.concatenate([pose, face, left_hand, right_hand])
+
 
 def predict_sign(model, actions, sequence_data):
     """Predict sign language from sequence data"""
@@ -101,10 +69,6 @@ def real_time_prediction():
     # Load model
     model, actions = load_model()
     
-    # Initialize MediaPipe
-    mp_holistic = mp.solutions.holistic
-    mp_drawing = mp.solutions.drawing_utils
-    
     # Initialize webcam
     cap = cv2.VideoCapture(0)
     
@@ -114,9 +78,9 @@ def real_time_prediction():
     
     # Class-specific thresholds (based on analysis)
     class_thresholds = {
-        "hello": 0.5,      # Very reliable
+        "hello": 0.8,      # Very reliable
         "thanks": 0.6,     # Some ambiguity with iloveyou
-        "iloveyou": 0.7    # Higher threshold due to similarity with thanks
+        "iloveyou": 0.5    # Higher threshold due to similarity with thanks
     }
     
     with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
