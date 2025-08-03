@@ -4,7 +4,6 @@ import numpy as np
 import os
 import cv2
 import mediapipe as mp
-from pytorch_model import LSTMModel
 from utils import extract_keypoints, mp_holistic, mp_drawing
 
 def load_model(model_path="improved_sign_language_model.pth"):
@@ -19,32 +18,13 @@ def load_model(model_path="improved_sign_language_model.pth"):
     model_config = checkpoint['model_config']
     actions = checkpoint['actions']
     
-    # Create model instance based on model type
-    if 'hidden_size1' in model_config:
-        # Complex model (original)
-        model = LSTMModel(
-            input_size=model_config['input_size'],
-            hidden_size1=model_config['hidden_size1'],
-            hidden_size2=model_config['hidden_size2'],
-            hidden_size3=model_config['hidden_size3'],
-            num_classes=model_config['num_classes']
-        )
-    elif 'fc1.weight' in checkpoint['model_state_dict']:
-        # Improved model (new) - has fc1 and fc2 layers
-        from improved_model import ImprovedLSTMModel
-        model = ImprovedLSTMModel(
-            input_size=model_config['input_size'],
-            hidden_size=model_config['hidden_size'],
-            num_classes=model_config['num_classes']
-        )
-    else:
-        # Simple model - has single fc layer
-        from simple_model import SimpleLSTMModel
-        model = SimpleLSTMModel(
-            input_size=model_config['input_size'],
-            hidden_size=model_config['hidden_size'],
-            num_classes=model_config['num_classes']
-        )
+    # Create improved model instance
+    from improved_model import ImprovedLSTMModel
+    model = ImprovedLSTMModel(
+        input_size=model_config['input_size'],
+        hidden_size=model_config['hidden_size'],
+        num_classes=model_config['num_classes']
+    )
     
     # Load model weights
     model.load_state_dict(checkpoint['model_state_dict'])
