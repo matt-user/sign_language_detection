@@ -11,11 +11,8 @@ from utils import (
 )
 
 # Load training data
-X, y = load_training_data()
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.05)
-
-
-
+# X, y = load_training_data()
+# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.05)
 
 def main():
     # Create necessary directories

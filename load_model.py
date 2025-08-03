@@ -7,7 +7,7 @@ import mediapipe as mp
 from pytorch_model import LSTMModel
 from utils import extract_keypoints, mp_holistic, mp_drawing
 
-def load_model(model_path="sign_language_model.pth"):
+def load_model(model_path="improved_sign_language_model.pth"):
     """Load the trained model from file"""
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file {model_path} not found. Please train the model first.")
@@ -19,14 +19,32 @@ def load_model(model_path="sign_language_model.pth"):
     model_config = checkpoint['model_config']
     actions = checkpoint['actions']
     
-    # Create model instance
-    model = LSTMModel(
-        input_size=model_config['input_size'],
-        hidden_size1=model_config['hidden_size1'],
-        hidden_size2=model_config['hidden_size2'],
-        hidden_size3=model_config['hidden_size3'],
-        num_classes=model_config['num_classes']
-    )
+    # Create model instance based on model type
+    if 'hidden_size1' in model_config:
+        # Complex model (original)
+        model = LSTMModel(
+            input_size=model_config['input_size'],
+            hidden_size1=model_config['hidden_size1'],
+            hidden_size2=model_config['hidden_size2'],
+            hidden_size3=model_config['hidden_size3'],
+            num_classes=model_config['num_classes']
+        )
+    elif 'fc1.weight' in checkpoint['model_state_dict']:
+        # Improved model (new) - has fc1 and fc2 layers
+        from improved_model import ImprovedLSTMModel
+        model = ImprovedLSTMModel(
+            input_size=model_config['input_size'],
+            hidden_size=model_config['hidden_size'],
+            num_classes=model_config['num_classes']
+        )
+    else:
+        # Simple model - has single fc layer
+        from simple_model import SimpleLSTMModel
+        model = SimpleLSTMModel(
+            input_size=model_config['input_size'],
+            hidden_size=model_config['hidden_size'],
+            num_classes=model_config['num_classes']
+        )
     
     # Load model weights
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -74,14 +92,14 @@ def real_time_prediction():
     
     # Sequence for prediction (30 frames)
     sequence = []
-    threshold = 0.5  # Lower confidence threshold for better detection
+    threshold = 0.8  # Lower confidence threshold for better detection
     
     # Class-specific thresholds (based on analysis)
-    class_thresholds = {
-        "hello": 0.8,      # Very reliable
-        "thanks": 0.6,     # Some ambiguity with iloveyou
-        "iloveyou": 0.5    # Higher threshold due to similarity with thanks
-    }
+    # class_thresholds = {
+    #     "hello": 0.8,      # Very reliable
+    #     "thanks": 0.6,     # Some ambiguity with iloveyou
+    #     "iloveyou": 0.5    # Higher threshold due to similarity with thanks
+    # }
     
     with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
         while cap.isOpened():
@@ -113,9 +131,10 @@ def real_time_prediction():
                 predicted_sign, confidence, probabilities = predict_sign(model, actions, sequence)
                 
                 # Get class-specific threshold
-                class_threshold = class_thresholds.get(predicted_sign, threshold)
+                # class_threshold = class_thresholds.get(predicted_sign, threshold)
+                class_threshold = 0.5
                 
-                # Display prediction
+                # Display predictionq
                 if confidence > class_threshold:
                     # Color based on confidence
                     if confidence > 0.9:
