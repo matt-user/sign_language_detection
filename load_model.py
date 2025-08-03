@@ -12,12 +12,7 @@ def load_model(model_path="sign_language_model.pth"):
         raise FileNotFoundError(f"Model file {model_path} not found. Please train the model first.")
     
     # Load the checkpoint with weights_only=False for compatibility
-    try:
-        checkpoint = torch.load(model_path, map_location=torch.device('cpu'), weights_only=False)
-    except Exception as e:
-        print(f"Warning: Failed to load with weights_only=False, trying alternative method...")
-        # Alternative loading method for newer PyTorch versions
-        checkpoint = torch.load(model_path, map_location=torch.device('cpu'))
+    checkpoint = torch.load(model_path, map_location=torch.device('cpu'), weights_only=False)
     
     # Extract model configuration
     model_config = checkpoint['model_config']
@@ -81,6 +76,15 @@ def predict_sign(model, actions, sequence_data):
     """Predict sign language from sequence data"""
     model.eval()
     with torch.no_grad():
+        # Ensure sequence_data is a numpy array
+        if isinstance(sequence_data, list):
+            sequence_data = np.array(sequence_data)
+        
+        # Ensure correct shape (30, 1662)
+        if sequence_data.shape != (30, 1662):
+            print(f"Warning: Expected shape (30, 1662), got {sequence_data.shape}")
+            return "unknown", 0.0, np.zeros(len(actions))
+        
         # Convert to tensor and add batch dimension
         input_tensor = torch.FloatTensor(sequence_data).unsqueeze(0)  # Shape: (1, 30, 1662)
         
@@ -106,7 +110,14 @@ def real_time_prediction():
     
     # Sequence for prediction (30 frames)
     sequence = []
-    threshold = 0.7  # Confidence threshold
+    threshold = 0.5  # Lower confidence threshold for better detection
+    
+    # Class-specific thresholds (based on analysis)
+    class_thresholds = {
+        "hello": 0.5,      # Very reliable
+        "thanks": 0.6,     # Some ambiguity with iloveyou
+        "iloveyou": 0.7    # Higher threshold due to similarity with thanks
+    }
     
     with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
         while cap.isOpened():
@@ -137,14 +148,36 @@ def real_time_prediction():
             if len(sequence) == 30:
                 predicted_sign, confidence, probabilities = predict_sign(model, actions, sequence)
                 
+                # Get class-specific threshold
+                class_threshold = class_thresholds.get(predicted_sign, threshold)
+                
                 # Display prediction
-                if confidence > threshold:
+                if confidence > class_threshold:
+                    # Color based on confidence
+                    if confidence > 0.9:
+                        color = (0, 255, 0)  # Green
+                    elif confidence > 0.8:
+                        color = (0, 255, 255)  # Yellow
+                    else:
+                        color = (0, 165, 255)  # Orange
+                    
                     cv2.putText(image, f'Prediction: {predicted_sign}', (10, 30), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                               cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
                     cv2.putText(image, f'Confidence: {confidence:.2f}', (10, 70), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                               cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+                    
+                    # Show all probabilities
+                    for i, (action, prob) in enumerate(zip(actions, probabilities)):
+                        y_pos = 110 + i * 30
+                        prob_color = (255, 255, 255)  # White
+                        if action == predicted_sign:
+                            prob_color = color  # Use prediction color
+                        cv2.putText(image, f'{action}: {prob:.3f}', (10, y_pos), 
+                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, prob_color, 1)
                 else:
-                    cv2.putText(image, 'No sign detected', (10, 30), 
+                    cv2.putText(image, f'Low confidence: {predicted_sign}', (10, 30), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    cv2.putText(image, f'Try again (need {class_threshold:.1f})', (10, 70), 
                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             
             # Show frame
